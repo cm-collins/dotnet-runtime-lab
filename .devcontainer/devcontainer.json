@@ -7,6 +7,7 @@
     "remoteUser": "root",
     "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
     "workspaceFolder": "/workspace",
+    "postStartCommand": "git config --global --replace-all safe.directory /workspace",
     "customizations": {
         "vscode": {
             "extensions": [
