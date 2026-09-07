@@ -1,196 +1,84 @@
+# Native AOT experiment guide
 
-# Native AOT — Experiment 01
+## At a glance
 
-This experiment explores **Native Ahead-of-Time (AOT) compilation in .NET**.
+| Mode | Compilation point | Launch artifact | Main trade-off |
+| --- | --- | --- | --- |
+| JIT | During application startup and execution | Managed DLL launched by `dotnet` | Flexible, but pays runtime compilation cost |
+| Native AOT | During `dotnet publish` | Platform-specific native executable | Fast startup and simpler deployment, but less runtime dynamism |
 
-The goal is to understand what happens when a .NET application is compiled into a native executable before it runs, and how this differs from the traditional JIT-based execution model.
+This experiment runs the same CPU-bound workload in both modes. It is a teaching baseline, not a production benchmark.
 
-## Objective
+## Question and hypothesis
 
-Build a small .NET application and compile it using **Native AOT**.
+**Question:** What changes when this program is published with Native AOT instead of run through the JIT?
 
-We will then use the same application to investigate:
+**Hypothesis:** AOT should produce a directly executable ELF file and avoid JIT work at startup. It may improve startup and packaging, while increasing publish time and reducing support for reflection or runtime code generation.
 
-- How Native AOT compilation works
-- What gets produced at build time
-- The resulting native executable
-- Startup behavior
-- Memory usage
-- Binary size
-- Runtime dependencies
-- How Native AOT differs from JIT
-- The trade-offs involved in using Native AOT
+## Workload and correctness
 
-
-
-## Experiment Structure
+`Program.cs` computes the sum of squares from `0` through `999,999`. The expected result is:
 
 ```text
-01-native-aot/
-├── 01-native-aot.csproj
-├── Program.cs
-└── README.md
+333332833333500000
 ```
 
+`verify.sh` checks this result in both modes so a performance comparison cannot silently compare different workloads.
 
+## Reproduce it
 
-## Environment
-
-The experiment runs inside the repository's Dev Container.
-
-Current environment:
-
-- .NET SDK 10.0.400
-- .NET Runtime 10.0.11
-- Ubuntu 24.04
-- Linux x64
-- Clang 18.1.3
-- GCC 13.3.0
-
-
-
-## Native AOT Build
-
-The application can be published using:
+From this directory:
 
 ```bash
-dotnet publish \
-  -c Release \
-  -r linux-x64 \
-  -p:PublishAot=true \
-  --self-contained true
+./verify.sh
 ```
 
-The resulting files are generated under:
+The script performs these checks:
 
-```text
-bin/Release/net10.0/linux-x64/publish/
-```
+| Stage | Evidence |
+| --- | --- |
+| JIT run | `dotnet run --configuration Release` produces the expected result |
+| AOT publish | `dotnet publish --runtime linux-x64 --self-contained true -p:PublishAot=true` succeeds |
+| Native format | `file` reports an ELF executable |
+| Target architecture | `readelf -h` reports x86-64 |
+| Direct launch | The published file runs without invoking `dotnet` |
+| System linkage | `ldd` shows operating-system libraries used by the executable |
 
-A successful Native AOT build produces a native executable:
+Native AOT is self-contained with respect to the .NET runtime, but it can still depend on operating-system libraries such as libc.
 
-```text
-01-native-aot
-```
+## Measurement plan
 
-along with debugging information:
+| Metric | JIT | Native AOT | Suggested evidence |
+| --- | --- | --- | --- |
+| Build time | — | — | `/usr/bin/time -v dotnet ...` |
+| Artifact size | DLL and runtime deployment | Native executable and dependencies | `du -h`, `stat -c %s` |
+| Startup | — | — | `hyperfine` or repeated `/usr/bin/time` runs |
+| Workload time | Printed by program | Printed by program | Program output |
+| Peak memory | — | — | `/usr/bin/time -f %M` |
+| Dependencies | .NET runtime files | OS libraries | `ldd` and publish directory listing |
 
-```text
-01-native-aot.dbg
-```
+Always record `dotnet --info`, `uname -a`, the git commit, configuration, runtime identifier, and number of repetitions. One run is not enough for a performance conclusion because CPU frequency, filesystem cache, and background load introduce noise.
 
+## Interpreting observations
 
+| Observation | Interpretation |
+| --- | --- |
+| AOT runs as `./01-native-aot` | The artifact is directly executable native code |
+| AOT publish is slower | Native code and runtime pieces are produced ahead of execution |
+| AOT has a larger deployment | More runtime code is bundled into the application |
+| `ldd` lists libc | Self-contained does not mean independent of the OS |
+| Reflection or dynamic code needs annotations | AOT must discover required code and metadata at build time |
 
-## Execution
+## Evidence checklist
 
-Run the generated native executable directly:
+- [x] Shared workload and expected-result check
+- [x] JIT baseline
+- [x] Native AOT publish
+- [x] ELF, architecture, and linkage inspection
+- [ ] Repeated startup benchmark
+- [ ] Peak-memory comparison
+- [ ] Binary-size report
+- [ ] Native disassembly and symbol inspection
+- [ ] Reflection/trimming/dynamic-code example
 
-```bash
-./bin/Release/net10.0/linux-x64/publish/01-native-aot
-```
-
-The executable does not require the .NET runtime to be installed separately on the target system.
-
-## What We Are Investigating
-
-The first stage of this experiment establishes that we can successfully transform:
-
-```text
-C# Source
-    ↓
-.NET Compiler
-    ↓
-IL
-    ↓
-Native AOT
-    ↓
-Native Executable
-```
-
-The next stage will compare this with the traditional JIT execution model:
-
-```text
-                    C# Source
-                        ↓
-                       IL
-                    ↙     ↘
-                  JIT      AOT
-                   ↓        ↓
-             Native Code  Native Code
-```
-
-We will use the **same application and workload** for both approaches wherever possible.
-
-## Measurements
-
-We will eventually record:
-
-
-| Metric               | JIT | Native AOT |
-| -------------------- | --- | ---------- |
-| Build time           | TBD | TBD        |
-| Binary size          | TBD | TBD        |
-| Startup time         | TBD | TBD        |
-| Memory usage         | TBD | TBD        |
-| Execution time       | TBD | TBD        |
-| Runtime dependencies | TBD | TBD        |
-
-
-These measurements will help us understand the practical differences rather than relying only on theoretical explanations.
-
-## Questions
-
-This experiment is intended to answer questions such as:
-
-1. What exactly does Native AOT produce?
-2. Does Native AOT eliminate the need for JIT?
-3. How does startup time change?
-4. How does memory consumption change?
-5. Why can Native AOT produce a self-contained native executable?
-6. What .NET features behave differently under Native AOT?
-7. When would Native AOT be a better choice than JIT?
-8. What trade-offs are introduced by AOT compilation?
-
-
-
-## Current Status
-
-- [x] Dev Container configured
-- [x] .NET 10 SDK available
-- [x] Native AOT toolchain verified
-- [x] Basic console application created
-- [x] Native AOT build successful
-- [x] Native executable generated
-- [ ] Establish JIT baseline
-- [ ] Establish AOT baseline
-- [ ] Benchmark startup
-- [ ] Benchmark memory usage
-- [ ] Compare binary sizes
-- [ ] Investigate generated native code
-- [ ] Document findings
-
-
-
-## Key Principle
-
-This repository is an **engineering lab**, not just a collection of examples.
-
-Each experiment should follow:
-
-```text
-Question
-   ↓
-Hypothesis
-   ↓
-Implementation
-   ↓
-Measurement
-   ↓
-Observation
-   ↓
-Explanation
-   ↓
-Conclusion
-```
-
-The purpose is to understand **why .NET behaves the way it does**, not simply how to use a particular feature.
+The root [`../../.devcontainer/`](../../.devcontainer/devcontainer.json) is the only development-container configuration for the repository.

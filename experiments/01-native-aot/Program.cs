@@ -5,7 +5,7 @@ Console.WriteLine();
 
 var stopwatch = Stopwatch.StartNew();
 
-const int iterations = 10_000_000;
+const int iterations = 1_000_000;
 
 long result = 0;
 
