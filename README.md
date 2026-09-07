@@ -68,3 +68,12 @@ Generated files belong in ignored bin/, obj/, publish/, and artifacts/ directori
 | Explain limits | Record OS, SDK, runtime, architecture, and commit |
 
 See docs/README.md for the learning path.
+
+## Current experiments
+
+| Experiment | Focus |
+| --- | --- |
+| 01 Native AOT | Repeated JIT versus AOT timing, ELF evidence, and correctness tests |
+| 02 JSON source generation | AOT-friendly serialization without runtime reflection discovery |
+
+Correctness tests live under tests/NativeAot.Tests and run with dotnet test.
