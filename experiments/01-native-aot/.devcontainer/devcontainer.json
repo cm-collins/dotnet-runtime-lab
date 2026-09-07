@@ -1,0 +1,30 @@
+{
+    "name": "dotnet-runtime-lab",
+    "build": {
+        "dockerfile": "Dockerfile.dev",
+        "context": ".."
+    },
+    "remoteUser": "root",
+    "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
+    "workspaceFolder": "/workspace",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-dotnettools.csdevkit",
+                "ms-dotnettools.csharp",
+                "ms-azuretools.vscode-docker",
+                "github.vscode-github-actions",
+                "eamodio.gitlens"
+            ],
+            "settings": {
+                "dotnet.defaultSolution": null,
+                "editor.formatOnSave": true
+            }
+        }
+    },
+    "postCreateCommand": "dotnet --info && gh --version && az version",
+    "containerEnv": {
+        "DOTNET_CLI_TELEMETRY_OPTOUT": "1",
+        "DOTNET_NOLOGO": "1"
+    }
+}
